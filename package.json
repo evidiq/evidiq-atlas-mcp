@@ -1,0 +1,44 @@
+{
+  "name": "@evidiq/atlas-mcp",
+  "version": "0.1.0",
+  "description": "EVIDIQ Atlas — isolated dataset research, analysis, comparison, and visualization via MCP and x402",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "evidiq-atlas": "dist/start-server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/start-server.js",
+    "dev": "tsx start-server.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.1",
+    "@modelcontextprotocol/sdk": "1.26.0",
+    "mcp-handler": "1.1.0",
+    "viem": "2.55.8",
+    "zod": "3.25.76"
+  },
+  "optionalDependencies": {
+    "@0gfoundation/0g-storage-ts-sdk": "1.2.10",
+    "@e2b/code-interpreter": "2.6.1",
+    "ethers": "6.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11",
+    "axios": "1.18.1",
+    "ws": "8.21.1"
+  }
+}
