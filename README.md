@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://evidiq.dev/docs/atlas"><img src="https://img.shields.io/badge/MCP%20Server-Preparing%20Launch-F5A623?style=flat-square" alt="MCP Server preparing launch" /></a>
+  <a href="https://mcp.evidiq.dev/atlas/mcp"><img src="https://img.shields.io/badge/MCP%20Server-Live-6E56CF?style=flat-square" alt="MCP Server live" /></a>
   <a href="https://duckdb.org"><img src="https://img.shields.io/badge/Engine-DuckDB%20in--memory-FFF000?style=flat-square&logo=duckdb&logoColor=black" alt="DuckDB in-memory engine" /></a>
   <a href="https://www.oklink.com/xlayer"><img src="https://img.shields.io/badge/X%20Layer-USDT0-3CCF4E?style=flat-square" alt="X Layer USDT0" /></a>
   <a href="https://evidiq.dev/docs/atlas"><img src="https://img.shields.io/badge/x402-0.005%E2%80%930.03%20USDT0-2563EB?style=flat-square" alt="x402: 0.005 to 0.03 USDT0" /></a>
@@ -41,10 +41,8 @@ Atlas never runs caller-authored Python, JavaScript, shell, DuckDB extensions,
 attached databases, or write/export SQL. Analysis is deterministic by design, so
 the same input produces the same report.
 
-> **Launch status: preparing launch.** The standalone service and Skill are
-> implemented and tested locally. The public endpoint and marketplace listing are
-> reserved until deployment and credentials are explicitly approved — nothing here
-> claims a live deployment yet.
+> **Launch status: live endpoint.** The MCP server is deployed at
+> `https://mcp.evidiq.dev/atlas`. The OKX.AI marketplace listing is in progress.
 
 ## What it does
 
@@ -70,8 +68,6 @@ JavaScript, shell, DuckDB extensions, attached databases, or write/export SQL.
 
 ## Use it from any agent
 
-> Endpoints below are reserved and activate at launch.
-
 ```bash
 # Read the public Skill document
 curl -s https://mcp.evidiq.dev/atlas/skill.md
@@ -83,7 +79,7 @@ curl -s https://mcp.evidiq.dev/atlas/x402
 claude mcp add --transport http evidiq-atlas https://mcp.evidiq.dev/atlas/mcp
 ```
 
-Public endpoints (reserved for launch):
+Public endpoints:
 
 | Endpoint | Purpose |
 |----------|---------|

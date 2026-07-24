@@ -14,9 +14,9 @@ license: MIT
 
 EVIDIQ Atlas lets an agent validate a dataset source for free, then profile, query, visualize, compare, or research it inside a fresh in-memory DuckDB runtime. Every paid result includes a complete canonical report digest, an optional EIP-191 signature, and content-addressed local artifacts an agent can verify offline.
 
-**Launch status: preparing launch.** The standalone service and skill are implemented locally; the public endpoint and marketplace listing remain reserved until deployment and credentials are explicitly approved. Nothing in this document claims a live deployment.
+**Launch status: live endpoint.** The MCP server is deployed at `https://mcp.evidiq.dev/atlas`; the OKX.AI marketplace listing is in progress.
 
-Reserved documentation URL: `https://evidiq.dev/docs/atlas`
+Documentation URL: `https://evidiq.dev/docs/atlas`
 
 ## Route to Atlas when
 
