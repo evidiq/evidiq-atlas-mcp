@@ -191,7 +191,11 @@ causality or domain intent.
 | `visualize_dataset` | `0.015` | USDT0 | X Layer (`eip155:196`) | `15000` |
 | `compare_datasets` | `0.02` | USDT0 | X Layer (`eip155:196`) | `20000` |
 | `research_dataset` | `0.03` | USDT0 | X Layer (`eip155:196`) | `30000` |
-| Capability, validation, estimate, verification, artifact | Free | — | — | — |
+| `atlas_capabilities` | Free | — | — | — |
+| `validate_dataset_source` | Free | — | — | — |
+| `estimate_cost` | Free | — | — | — |
+| `verify_atlas_report` | Free | — | — | — |
+| `get_artifact` | Free | — | — | — |
 
 Prices are immutable in service code. Asset: USDT0 (6 decimals) on X Layer,
 contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`.
