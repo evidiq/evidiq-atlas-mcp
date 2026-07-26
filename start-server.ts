@@ -211,6 +211,20 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // HEAD must answer with the status a GET would return and no body. The MCP
+  // Streamable-HTTP transport cannot serve HEAD, so a HEAD forwarded to it never
+  // completes — the connection just hangs and a reachability prober reports the
+  // endpoint as offline. Answer it here instead.
+  if (request.method === "HEAD") {
+    response.writeHead(atlasConfig ? 402 : 200, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      allow: "POST, OPTIONS, HEAD",
+    });
+    response.end();
+    return;
+  }
+
   try {
     await send(await gatedHandler(await toWebRequest(request)), response);
   } catch (error) {
