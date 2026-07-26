@@ -536,10 +536,62 @@ describe("Atlas x402 gate", () => {
     expect(statusCalls).toBe(1);
     expect(handlerCalls).toBe(1);
 
+    // A repeat of an already-completed paid call is idempotent: the caller gets
+    // the same result back, while settlement and the paid work still happen
+    // exactly once. Answering an error here would make a client that retries
+    // (or sends the request twice) believe its paid call failed.
     const replay = await gate(
       request(rpc("profile_dataset"), signed.header)
     );
-    expect(replay.status).toBe(409);
+    expect(replay.status).toBe(200);
+    expect(decodePaymentResponse(replay)).toMatchObject({
+      status: "settled",
+      transaction,
+    });
+    expect(settleCalls).toBe(1);
+    expect(handlerCalls).toBe(1);
+  });
+
+  it("lets a concurrent duplicate authorization wait and receive the same result", async () => {
+    const signed = await signedPayment();
+    let handlerCalls = 0;
+    let settleCalls = 0;
+    const transaction = `0x${"cc".repeat(32)}`;
+    const verifier: PaymentVerifier = {
+      verify: async () => ({ valid: true, payer: payerAccount.address }),
+      settle: async () => {
+        settleCalls += 1;
+        // Hold the settlement open so the second request genuinely overlaps.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return {
+          status: "settled",
+          success: true,
+          transaction,
+          payer: payerAccount.address,
+        };
+      },
+    };
+    const gate = withX402Gate(
+      async () => {
+        handlerCalls += 1;
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      },
+      { verifierFactory: () => verifier }
+    );
+
+    const [first, duplicate] = await Promise.all([
+      gate(request(rpc("profile_dataset"), signed.header)),
+      gate(request(rpc("profile_dataset"), signed.header)),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(duplicate.status).toBe(200);
+    expect(decodePaymentResponse(duplicate)).toMatchObject({
+      status: "settled",
+      transaction,
+    });
     expect(settleCalls).toBe(1);
     expect(handlerCalls).toBe(1);
   });

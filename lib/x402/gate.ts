@@ -32,6 +32,9 @@ type PaidCall = {
   message: JsonRpcCall;
 };
 
+/** How long a duplicate request waits for an in-flight settlement to resolve. */
+const DUPLICATE_WAIT_MS = 25_000;
+
 type PendingSettlement = Extract<SettleResult, { status: "pending" }>;
 type CachedSettlement =
   | {
@@ -39,6 +42,13 @@ type CachedSettlement =
       payer: string;
       fingerprint: string;
       expiresAt: number;
+      /**
+       * The single in-flight settlement for this authorization. A duplicate
+       * request awaits this promise instead of being turned away, so one
+       * authorization is settled exactly once and every caller holding it
+       * still learns the real outcome.
+       */
+      settlement: Promise<SettleResult>;
     }
   | {
       kind: "checking";
@@ -54,6 +64,55 @@ type CachedSettlement =
     };
 
 const settlementCache = new Map<string, CachedSettlement>();
+
+/** A paid response captured so it can be handed to more than one caller. */
+type SerializedResponse = {
+  status: number;
+  headers: [string, string][];
+  body: string;
+};
+
+/**
+ * The single paid execution for one authorization, shared by every request that
+ * carries it. Storing the *promise* — not just the finished response — is what
+ * makes a concurrent duplicate safe: the second caller attaches to the run
+ * already underway instead of starting the paid work a second time. One
+ * authorization therefore means one charge, one execution, and one result,
+ * replayed to whoever asks for it again within the TTL.
+ */
+type PaidRun = {
+  fingerprint: string;
+  expiresAt: number;
+  run: Promise<SerializedResponse>;
+};
+
+const paidRunCache = new Map<string, PaidRun>();
+
+function toResponse(captured: SerializedResponse): Response {
+  return new Response(captured.body, {
+    status: captured.status,
+    headers: captured.headers,
+  });
+}
+
+async function captureResponse(response: Response): Promise<SerializedResponse> {
+  return {
+    status: response.status,
+    headers: [...response.headers.entries()],
+    body: await response.text(),
+  };
+}
+
+/** The in-flight or completed paid run for this authorization, if any. */
+function existingPaidRun(key: string, fingerprint: string): Promise<SerializedResponse> | null {
+  const cached = paidRunCache.get(key);
+  if (!cached || cached.fingerprint !== fingerprint) return null;
+  if (cached.expiresAt <= Date.now()) {
+    paidRunCache.delete(key);
+    return null;
+  }
+  return cached.run;
+}
 
 export type X402GateDependencies = Readonly<{
   verifierFactory?: (cfg: AtlasConfig) => PaymentVerifier;
@@ -182,6 +241,9 @@ function jsonRpcError(
 function cleanupSettlementCache(now: number): void {
   for (const [key, entry] of settlementCache) {
     if (entry.expiresAt <= now) settlementCache.delete(key);
+  }
+  for (const [key, entry] of paidRunCache) {
+    if (entry.expiresAt <= now) paidRunCache.delete(key);
   }
 }
 
@@ -417,17 +479,32 @@ export function withX402Gate(
     cleanupSettlementCache(now);
 
     const runPaidHandler = async (
+      key: string,
+      expiresAt: number,
       settlement: Extract<SettleResult, { status: "settled" }>
     ): Promise<Response> => {
-      const response = await handler(handlerRequest(req, bodyText));
-      return finalize(response, clientWantsEventStream, {
-        "payment-response": paymentResponseHeader(
-          settlement.transaction ? "settled" : "verified",
-          amount,
-          settlement.payer,
-          settlement.transaction
-        ),
-      });
+      const alreadyRunning = existingPaidRun(key, fingerprint);
+      if (alreadyRunning) return toResponse(await alreadyRunning);
+
+      const run = (async () => {
+        const response = await handler(handlerRequest(req, bodyText));
+        const finalized = await finalize(response, clientWantsEventStream, {
+          "payment-response": paymentResponseHeader(
+            settlement.transaction ? "settled" : "verified",
+            amount,
+            settlement.payer,
+            settlement.transaction
+          ),
+        });
+        return captureResponse(finalized);
+      })();
+
+      if (paidRunCache.size < SETTLEMENT_CACHE_MAX_ENTRIES) {
+        paidRunCache.set(key, { fingerprint, expiresAt, run });
+        // A failed run must not be replayed to later callers as the outcome.
+        run.catch(() => paidRunCache.delete(key));
+      }
+      return toResponse(await run);
     };
 
     const respondToMatchingCache = async (
@@ -435,13 +512,35 @@ export function withX402Gate(
       cached: CachedSettlement
     ): Promise<Response | null> => {
       if (cached.fingerprint !== fingerprint) return null;
+
+      // A duplicate of a paid call that already ran — or is running right now —
+      // gets that same answer back rather than a "pending" with no result.
+      const alreadyRunning = existingPaidRun(key, fingerprint);
+      if (alreadyRunning) return toResponse(await alreadyRunning);
+
       if (cached.kind === "settling") {
-        return pendingResponse(
-          id,
-          amount,
-          cached.payer,
-          "Settlement is already in progress for this authorization."
-        );
+        // Wait for the settlement this authorization already started rather than
+        // answering "pending" and leaving the caller with no result. Only a
+        // caller that waits past the deadline is told to retry.
+        const timedOut = Symbol("timeout");
+        const outcome = await Promise.race([
+          cached.settlement.catch(() => timedOut),
+          new Promise<typeof timedOut>((resolve) =>
+            setTimeout(() => resolve(timedOut), DUPLICATE_WAIT_MS)
+          ),
+        ]);
+        if (outcome === timedOut) {
+          return pendingResponse(
+            id,
+            amount,
+            cached.payer,
+            "Settlement is already in progress for this authorization."
+          );
+        }
+        const settled = outcome as SettleResult;
+        return settled.status === "settled"
+          ? runPaidHandler(key, cached.expiresAt, settled)
+          : settlementStateResponse(settled, id, amount);
       }
       if (cached.kind === "checking") {
         return settlementStateResponse(cached.result, id, amount);
@@ -476,7 +575,7 @@ export function withX402Gate(
         expiresAt: cached.expiresAt,
       });
       return updated.status === "settled"
-        ? runPaidHandler(updated)
+        ? runPaidHandler(key, cached.expiresAt, updated)
         : settlementStateResponse(updated, id, amount);
     };
 
@@ -516,9 +615,6 @@ export function withX402Gate(
           "Settlement is already in progress for this authorization."
         );
       }
-      if (cached.kind === "checking") {
-        return settlementStateResponse(cached.result, id, amount);
-      }
       return settlementStateResponse(cached.result, id, amount);
     }
     if (settlementCache.size >= SETTLEMENT_CACHE_MAX_ENTRIES) {
@@ -533,24 +629,27 @@ export function withX402Gate(
     }
 
     const expiresAt = now + SETTLEMENT_CACHE_TTL_MS;
+
+    // Publish the in-flight settlement before awaiting it, so a duplicate that
+    // arrives mid-flight attaches to this exact promise instead of starting a
+    // second settlement or being turned away with "pending".
+    const settlementPromise = verifier.settle(payment, requirements).catch(
+      (): SettleResult => ({
+        status: "ambiguous",
+        success: false,
+        payer: verdict.payer,
+        errorReason: "settlement call ended without a definitive response",
+      })
+    );
     settlementCache.set(key, {
       kind: "settling",
       payer: verdict.payer,
       fingerprint,
       expiresAt,
+      settlement: settlementPromise,
     });
 
-    let settlement: SettleResult;
-    try {
-      settlement = await verifier.settle(payment, requirements);
-    } catch {
-      settlement = {
-        status: "ambiguous",
-        success: false,
-        payer: verdict.payer,
-        errorReason: "settlement call ended without a definitive response",
-      };
-    }
+    const settlement = await settlementPromise;
     settlementCache.set(key, {
       kind: "result",
       result: settlement,
@@ -559,7 +658,7 @@ export function withX402Gate(
     });
 
     return settlement.status === "settled"
-      ? runPaidHandler(settlement)
+      ? runPaidHandler(key, expiresAt, settlement)
       : settlementStateResponse(settlement, id, amount);
   };
 }

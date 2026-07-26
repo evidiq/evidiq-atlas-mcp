@@ -125,9 +125,34 @@ async function send(response: Response, output: ServerResponse): Promise<void> {
   }
 }
 
+/**
+ * One access-log line per request, emitted when the response finishes.
+ *
+ * Without this there is no way to tell whether a caller — a marketplace
+ * reachability probe, a listing reviewer, or a paying agent — ever reached the
+ * service, or what it was answered. Only non-sensitive metadata is logged:
+ * never a payment envelope, a signature, or an authorization header.
+ */
+function logRequest(request: IncomingMessage, response: ServerResponse): void {
+  const startedAt = Date.now();
+  response.on("finish", () => {
+    const forwarded =
+      request.headers["cf-connecting-ip"] ?? request.headers["x-forwarded-for"];
+    const client = Array.isArray(forwarded)
+      ? forwarded[0]
+      : forwarded ?? request.socket.remoteAddress;
+    const paid = request.headers["payment-signature"] ? " paid=1" : "";
+    console.log(
+      `[req] ${request.method} ${request.url} -> ${response.statusCode} ${Date.now() - startedAt}ms ` +
+        `ip=${client ?? "?"} ua="${request.headers["user-agent"] ?? "-"}" ` +
+        `accept="${request.headers.accept ?? "-"}"${paid}`
+    );
+  });
+}
+
 function cors(response: ServerResponse): void {
   response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS, HEAD");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version, PAYMENT-SIGNATURE");
   response.setHeader("Access-Control-Expose-Headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE");
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -152,6 +177,7 @@ function sendPayloadTooLarge(error: PayloadTooLargeError, response: ServerRespon
 }
 
 const server = createServer(async (request, response) => {
+  logRequest(request, response);
   cors(response);
   if (request.method === "OPTIONS") { response.writeHead(204); response.end(); return; }
   const path = new URL(request.url || "/", `http://127.0.0.1:${PORT}`).pathname;
