@@ -413,6 +413,14 @@ export function withX402Gate(
     try {
       parsed = JSON.parse(bodyText);
     } catch {
+      // A marketplace reachability probe POSTs an empty or non-JSON-RPC body and
+      // expects 402 or 200 — it reads anything else, 400 included, as an
+      // unreachable endpoint. Answer an unauthenticated probe with the payment
+      // challenge instead. A caller that did send a payment header still gets a
+      // parse error, because charging for an unreadable request would be wrong.
+      if (cfg && !req.headers.get("payment-signature")) {
+        return build402Response(cfg, cfg.publicBaseUrl);
+      }
       return jsonRpcError(
         -32700,
         "Parse error: request body is not valid JSON."
