@@ -95,6 +95,45 @@ export type AtlasConfig = {
   useFacilitator: boolean;
 };
 
+/**
+ * Credentials for the official OKX Payment SDK, issued by the OKX Developer
+ * Portal. When present, the SDK becomes the verification and settlement path.
+ */
+export type OkxCredentials = {
+  apiKey: string;
+  secretKey: string;
+  passphrase: string;
+  baseUrl: string;
+  syncSettle: boolean;
+};
+
+/**
+ * Read the OKX Payment SDK credentials, or return null when the service is not
+ * configured for the official facilitator. All three values are required
+ * together; a partial configuration is a hard error rather than a silent
+ * downgrade to a non-SDK payment path.
+ */
+export function getOkxCredentials(): OkxCredentials | null {
+  const apiKey = process.env.OKX_API_KEY?.trim();
+  const secretKey = process.env.OKX_SECRET_KEY?.trim();
+  const passphrase = process.env.OKX_PASSPHRASE?.trim();
+
+  if (!apiKey && !secretKey && !passphrase) return null;
+  if (!apiKey || !secretKey || !passphrase) {
+    throw new Error(
+      "Incomplete OKX Payment SDK config: OKX_API_KEY, OKX_SECRET_KEY, and OKX_PASSPHRASE must be set together"
+    );
+  }
+
+  return {
+    apiKey,
+    secretKey,
+    passphrase,
+    baseUrl: process.env.OKX_BASE_URL?.trim() || DEFAULT_FACILITATOR_URL,
+    syncSettle: process.env.OKX_SYNC_SETTLE?.trim() !== "0",
+  };
+}
+
 /** Return the immutable price for a paid Atlas tool, or undefined otherwise. */
 export function priceForTool(toolName: string): bigint | undefined {
   if (!PAID_TOOLS.has(toolName)) return undefined;

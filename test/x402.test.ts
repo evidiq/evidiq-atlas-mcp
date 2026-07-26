@@ -34,6 +34,9 @@ const envNames = [
   "X402_FACILITATOR_URL",
   "X402_RPC",
   "X402_RPC_URL",
+  "OKX_API_KEY",
+  "OKX_SECRET_KEY",
+  "OKX_PASSPHRASE",
 ] as const;
 const original = new Map(envNames.map((name) => [name, process.env[name]]));
 
@@ -64,6 +67,11 @@ beforeEach(() => {
   delete process.env.X402_FACILITATOR_URL;
   delete process.env.X402_RPC;
   delete process.env.X402_RPC_URL;
+  // Keep the local verifier path deterministic: an ambient OKX credential must
+  // not switch these tests onto the official SDK (which would call the network).
+  delete process.env.OKX_API_KEY;
+  delete process.env.OKX_SECRET_KEY;
+  delete process.env.OKX_PASSPHRASE;
 });
 
 afterEach(() => {

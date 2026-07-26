@@ -20,8 +20,9 @@
   <a href="https://mcp.evidiq.dev/atlas/mcp"><img src="https://img.shields.io/badge/MCP%20Server-Live-6E56CF?style=flat-square" alt="MCP Server live" /></a>
   <a href="https://duckdb.org"><img src="https://img.shields.io/badge/Engine-DuckDB%20in--memory-FFF000?style=flat-square&logo=duckdb&logoColor=black" alt="DuckDB in-memory engine" /></a>
   <a href="https://www.oklink.com/xlayer"><img src="https://img.shields.io/badge/X%20Layer-USDT0-3CCF4E?style=flat-square" alt="X Layer USDT0" /></a>
-  <a href="https://evidiq.dev/docs/atlas"><img src="https://img.shields.io/badge/x402-0.005%E2%80%930.03%20USDT0-2563EB?style=flat-square" alt="x402: 0.005 to 0.03 USDT0" /></a>
-  <a href="https://okx.ai"><img src="https://img.shields.io/badge/OKX.AI-A2MCP%20%C2%B7%20Reserved-121212?style=flat-square&logo=okx&logoColor=white" alt="OKX.AI A2MCP reserved" /></a>
+  <a href="https://mcp.evidiq.dev/atlas/x402"><img src="https://img.shields.io/badge/x402-0.005%E2%80%930.03%20USDT0-2563EB?style=flat-square" alt="x402: 0.005 to 0.03 USDT0" /></a>
+  <a href="https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk"><img src="https://img.shields.io/badge/Payments-Official%20OKX%20SDK-121212?style=flat-square&logo=okx&logoColor=white" alt="Official OKX Payment SDK" /></a>
+  <a href="https://www.okx.ai/agents/9023"><img src="https://img.shields.io/badge/OKX.AI-Agent%20%239023%20Under%20Review-121212?style=flat-square&logo=okx&logoColor=white" alt="OKX.AI Agent 9023 under review" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=flat-square" alt="License: MIT" /></a>
 </p>
 
@@ -42,7 +43,8 @@ attached databases, or write/export SQL. Analysis is deterministic by design, so
 the same input produces the same report.
 
 > **Launch status: live endpoint.** The MCP server is deployed at
-> `https://mcp.evidiq.dev/atlas`. The OKX.AI marketplace listing is in progress.
+> `https://mcp.evidiq.dev/atlas`, paid calls settle through the official OKX
+> Payment SDK, and the OKX.AI listing (**Agent #9023**) is under review.
 
 ## What it does
 
@@ -208,6 +210,45 @@ broadcast but not yet confirmed, Atlas returns HTTP `202` with `status: "pending
 and the transaction hash — retry with the **same authorization** to check
 confirmation without paying again.
 
+### Official OKX Payment SDK
+
+Payment verification and settlement run through the **official OKX Onchain OS
+Payment SDK**, not a hand-rolled payment stack:
+
+| Package | Role |
+|---------|------|
+| [`@okxweb3/x402-core`](https://www.npmjs.com/package/@okxweb3/x402-core) | `OKXFacilitatorClient` (HMAC-SHA256 OKX REST auth) and `x402ResourceServer` |
+| [`@okxweb3/x402-evm`](https://www.npmjs.com/package/@okxweb3/x402-evm) | `ExactEvmScheme` — the EVM `exact` scheme server implementation |
+
+The OKX facilitator verifies each authorization and settles it on X Layer; Atlas
+keeps ownership of routing, per-tool pricing, report generation, and anchoring.
+Each price reaches the SDK as an explicit USD₮0 **atomic asset amount** rather than
+a USD string, so the immutable per-tool fee and its token cannot be substituted by
+currency conversion.
+
+When the facilitator's own confirmation wait elapses it answers `timeout` even
+though the transaction it broadcast can still confirm moments later, so Atlas
+resolves that state through the facilitator's settlement-status lookup rather than
+discarding a paid call. Success is only ever reported when the facilitator
+confirms it.
+
+Integration guide: [OKX Onchain OS — integrate via SDK](https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk).
+
+## Proven on-chain
+
+A live paid analysis against the deployed endpoint completed the full x402 v2
+round trip through the official OKX facilitator:
+
+| | |
+|---|---|
+| Tool | `profile_dataset` |
+| Amount | `0.005 USDT0` (`5000` atomic) on X Layer (`eip155:196`) |
+| Flow | unpaid call → HTTP 402 + `PAYMENT-REQUIRED` → EIP-3009 signature → `PAYMENT-SIGNATURE` retry → HTTP 200 + `PAYMENT-RESPONSE` |
+| Settlement tx | [`0x3ea2fa79…15da6c`](https://www.oklink.com/xlayer/tx/0x3ea2fa7947eabcfb6527702700b57d6c760cffe6bc356b048528a8468115da6c) · success |
+| Result | canonical dataset profile with schema, null/distinct counts, and top values |
+
+Free tools stay ungated and answer `200` without any payment header.
+
 ## Architecture
 
 ```mermaid
@@ -307,14 +348,26 @@ PORT=3000
 HOSTNAME=0.0.0.0
 PUBLIC_BASE_URL=https://mcp.evidiq.dev/atlas
 
+# Official OKX Payment SDK — required for the production payment path.
+# Create the credentials at https://web3.okx.com/onchainos/dev-portal
+# All three must be set together; a partial set is rejected at startup.
+OKX_API_KEY=...
+OKX_SECRET_KEY=...
+OKX_PASSPHRASE=...
+OKX_BASE_URL=https://web3.okx.com
+# OKX_SYNC_SETTLE=0   # opt out of the facilitator's synchronous confirmation wait
+
 # x402 v2 — X Layer mainnet / USDT0 (prices are fixed per tool; no X402_PRICE)
 X402_CHAIN=eip155:196
 X402_ASSET=0x779ded0c9e1022225f8e0630b35a9b54be713736
 X402_PAY_TO=0x2a8efe3093278bb4bd3b2d9c7b5ba992ca4fc9b0
 X402_DOMAIN_NAME=USD₮0
 X402_DOMAIN_VERSION=1
-X402_FACILITATOR_URL=https://web3.okx.com
 X402_RPC=https://rpc.xlayer.tech
+# The two settings below are legacy fallbacks, used only when no OKX credentials
+# are configured (for example a self-hosted deployment without a Developer
+# Portal account). With OKX credentials present, the official SDK is the path.
+# X402_FACILITATOR_URL=https://web3.okx.com
 # X402_USE_FACILITATOR=1
 # X402_SETTLE_KEY=0x...            # gas-funded X Layer wallet for direct settlement
 
@@ -347,6 +400,12 @@ npm run dev      # start the local watch server
 
 - **Website** — https://evidiq.dev
 - **Atlas documentation** — https://evidiq.dev/docs/atlas
+- **Live MCP endpoint** — https://mcp.evidiq.dev/atlas/mcp
+- **Agent Skill** — https://mcp.evidiq.dev/atlas/skill.md
+- **x402 discovery** — https://mcp.evidiq.dev/atlas/x402
+- **OKX.AI Agent #9023** — https://www.okx.ai/agents/9023
+- **OKX Payment SDK guide** — https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk
+- **Settlement proof** — https://www.oklink.com/xlayer/tx/0x3ea2fa7947eabcfb6527702700b57d6c760cffe6bc356b048528a8468115da6c
 - **EVIDIQ main repository** — https://github.com/evidiq/evidiq
 - **EVIDIQ Notary** — https://github.com/evidiq/evidiq-notary-mcp
 - **EVIDIQ Operator** — https://github.com/evidiq/evidiq-operator

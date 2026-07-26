@@ -1,4 +1,5 @@
-import type { AtlasConfig } from "./config.js";
+import { getOkxCredentials, type AtlasConfig } from "./config.js";
+import { OkxSdkVerifier } from "./okx.js";
 import { OnchainSettler } from "./settle.js";
 import type {
   PaymentPayload,
@@ -344,7 +345,15 @@ export class FacilitatorClient implements PaymentVerifier {
   }
 }
 
+/**
+ * Select the payment path. The official OKX Payment SDK takes precedence
+ * whenever Developer Portal credentials are configured; the legacy direct
+ * settler and the local verifier remain only for self-hosted deployments
+ * without OKX credentials.
+ */
 export function getVerifier(cfg: AtlasConfig): PaymentVerifier {
+  const credentials = getOkxCredentials();
+  if (credentials) return new OkxSdkVerifier(cfg, credentials);
   if (cfg.useFacilitator) return new FacilitatorClient(cfg);
   if (cfg.settleKey) return new OnchainSettler(cfg);
   return new LocalVerifier(cfg);
