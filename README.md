@@ -17,13 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://mcp.evidiq.dev/atlas/mcp"><img src="https://img.shields.io/badge/MCP%20Server-Live-6E56CF?style=flat-square" alt="MCP Server live" /></a>
-  <a href="https://duckdb.org"><img src="https://img.shields.io/badge/Engine-DuckDB%20in--memory-FFF000?style=flat-square&logo=duckdb&logoColor=black" alt="DuckDB in-memory engine" /></a>
-  <a href="https://www.oklink.com/xlayer"><img src="https://img.shields.io/badge/X%20Layer-USDT0-3CCF4E?style=flat-square" alt="X Layer USDT0" /></a>
-  <a href="https://mcp.evidiq.dev/atlas/x402"><img src="https://img.shields.io/badge/x402-0.005%E2%80%930.03%20USDT0-2563EB?style=flat-square" alt="x402: 0.005 to 0.03 USDT0" /></a>
-  <a href="https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk"><img src="https://img.shields.io/badge/Payments-Official%20OKX%20SDK-121212?style=flat-square&logo=okx&logoColor=white" alt="Official OKX Payment SDK" /></a>
-  <a href="https://www.okx.ai/agents/9023"><img src="https://img.shields.io/badge/OKX.AI-Agent%20%239023%20Under%20Review-121212?style=flat-square&logo=okx&logoColor=white" alt="OKX.AI Agent 9023 under review" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=flat-square" alt="License: MIT" /></a>
+  <a href="https://mcp.evidiq.dev/atlas/mcp"><img src="https://img.shields.io/badge/MCP%20Server-Live-6E56CF?style=flat-square" alt="MCP Server live" /></a> <a href="https://duckdb.org"><img src="https://img.shields.io/badge/Engine-DuckDB%20in--memory-FFF000?style=flat-square&logo=duckdb&logoColor=black" alt="DuckDB in-memory engine" /></a> <a href="https://www.oklink.com/xlayer"><img src="https://img.shields.io/badge/X%20Layer-USDT0-3CCF4E?style=flat-square" alt="X Layer USDT0" /></a> <a href="https://mcp.evidiq.dev/atlas/x402"><img src="https://img.shields.io/badge/x402-0.005%E2%80%930.03%20USDT0-2563EB?style=flat-square" alt="x402: 0.005 to 0.03 USDT0" /></a> <a href="https://web3.okx.com/onchainos/dev-docs/payments/service-seller-sdk"><img src="https://img.shields.io/badge/Payments-Official%20OKX%20SDK-121212?style=flat-square&logo=okx&logoColor=white" alt="Official OKX Payment SDK" /></a> <a href="https://www.okx.ai/agents/9023"><img src="https://img.shields.io/badge/OKX.AI-Agent%20%239023%20Listed-121212?style=flat-square&logo=okx&logoColor=white" alt="OKX.AI Agent 9023 listed" /></a> <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=flat-square" alt="License: MIT" /></a>
 </p>
 
 ---

@@ -7,3 +7,6 @@ coverage/
 *.log
 .DS_Store
 .atlas-artifacts/
+
+# Internal build plan — not part of the published service.
+PLAN.md
