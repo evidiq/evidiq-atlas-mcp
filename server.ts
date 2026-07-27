@@ -264,9 +264,12 @@ export const handler = createMcpHandler(
       {
         title: "Verify a canonical Atlas report",
         description: "Recompute report integrity and verify trusted authenticity. integrityValid can be true for an unsigned report; valid/authentic require a valid signature from expectedSigner or the configured trusted signer. Free.",
+        // Ids are plain strings here. A regex in the schema rejects in the MCP
+        // layer as -32602, so an id of the wrong shape would come back from a
+        // free tool as a protocol error instead of a verdict.
         inputSchema: {
           report: z.record(z.unknown()).optional(),
-          artifactId: reportArtifactIdSchema.optional(),
+          artifactId: z.string().optional(),
           expectedSigner: evmAddressSchema.optional(),
         },
       },
@@ -274,7 +277,24 @@ export const handler = createMcpHandler(
         const hasReport = report !== undefined;
         const hasArtifactId = artifactId !== undefined;
         if (hasReport === hasArtifactId) {
-          return textResult({ valid: false, error: "Provide exactly one of report or artifactId" });
+          return textResult({
+            valid: false,
+            error: "Provide exactly one of report or artifactId",
+            required: {
+              report: "the report object exactly as returned by a paid call",
+              artifactId: "an Atlas report content id, atlas_report_<64 hex>",
+            },
+            note: "Free. Integrity is recomputed locally; authenticity needs a signature from the trusted signer.",
+          });
+        }
+
+        if (hasArtifactId && !reportArtifactIdSchema.safeParse(artifactId).success) {
+          return textResult({
+            valid: false,
+            error: `Not an Atlas report content id: ${artifactId}`,
+            expectedShape: "atlas_report_<64 lowercase hex>",
+            note: "Report ids are returned in paid results as report.artifactId.",
+          });
         }
 
         const candidate = hasReport ? report : (await getArtifact(artifactId!))?.content;
@@ -293,9 +313,21 @@ export const handler = createMcpHandler(
       {
         title: "Retrieve an Atlas artifact by content ID",
         description: "Fetch a content-addressed JSON report, chart, query, profile, comparison, or research artifact. Free; an artifact ID is not an access-control token.",
-        inputSchema: { artifactId: artifactIdSchema.optional() },
+        inputSchema: { artifactId: z.string().optional() },
       },
       async ({ artifactId }) => {
+        if (artifactId && !artifactIdSchema.safeParse(artifactId).success) {
+          // A miss and a malformed id are both "no artifact", not a protocol
+          // error. Say which shape is expected and let the caller correct it.
+          return textResult({
+            found: false,
+            artifactId,
+            error: "Not an Atlas content id",
+            expectedShape:
+              "atlas_{report|chart|query|research|comparison|profile}_<64 lowercase hex>",
+            note: "Free. Ids are returned in paid results as artifacts[].id or report.artifactId.",
+          });
+        }
         if (!artifactId) {
           return textResult({
             found: false,
