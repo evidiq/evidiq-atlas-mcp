@@ -199,14 +199,18 @@ export class OkxSdkVerifier implements PaymentVerifier {
       };
     }
 
+    // A settled response with no transaction hash used to be refused here, on the
+    // reasoning that success needs on-chain evidence. That was wrong, and it cost a
+    // listing: the facilitator is the authority on whether a payment settled, so
+    // refusing means denying service for a payment the payer has already made. It is
+    // exactly what OKX's reviewer saw — their paid calls came back 402, which their
+    // report described as the service not being integrated with the SDK. Honour the
+    // facilitator's verdict, and make the missing hash visible instead of fatal.
     if (BigInt(requirements.amount) > 0n && !transaction) {
-      return {
-        status: "ambiguous",
-        success: false,
-        payer,
-        errorReason:
-          "the OKX facilitator reported success without a settlement transaction",
-      };
+      console.warn(
+        `[x402] SETTLED WITHOUT TX the OKX facilitator reported success with no settlement transaction` +
+          ` amount=${requirements.amount} payer=${payer}`
+      );
     }
 
     return {

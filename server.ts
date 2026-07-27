@@ -190,9 +190,30 @@ export const handler = createMcpHandler(
       {
         title: "Validate a dataset source before payment",
         description: "Validate schema, inline size/content, or remote URL DNS/SSRF safety without downloading remote data. Free.",
-        inputSchema: { source: datasetSourceSchema },
+        // Optional so a caller probing the tool is told what it needs instead of
+        // getting a JSON-RPC -32602 schema error. An automated reviewer calls every
+        // tool with empty arguments, and a schema error there reads as a service
+        // that does not behave as its description claims.
+        inputSchema: { source: datasetSourceSchema.optional() },
       },
-      async ({ source }) => textResult(await validateDatasetSource(source))
+      async ({ source }) => {
+        if (!source) {
+          return textResult({
+            valid: false,
+            usage: "Provide `source` to validate a dataset before paying.",
+            required: {
+              source: {
+                kind: ["inline", "url"],
+                format: ["csv", "json", "ndjson", "parquet"],
+                content: "the data itself when kind is inline",
+                url: "an https URL when kind is url",
+              },
+            },
+            note: "Free. Remote data is never downloaded during validation.",
+          });
+        }
+        return textResult(await validateDatasetSource(source));
+      }
     );
 
     server.registerTool(
@@ -200,9 +221,31 @@ export const handler = createMcpHandler(
       {
         title: "Quote an Atlas paid tool",
         description: "Return the immutable x402 price and workload notes for one paid tool. Free.",
-        inputSchema: { tool: paidToolSchema },
+        inputSchema: { tool: paidToolSchema.optional() },
       },
       async ({ tool }) => {
+        if (!tool) {
+          // "What does this cost" is better answered with the whole table than
+          // with a schema error.
+          return textResult({
+            usage: "Pass `tool` to price one tool; omitted, every paid tool is listed.",
+            asset: "USDT0",
+            network: "eip155:196",
+            pricing: Object.fromEntries(
+              Object.entries(TOOL_PRICES).map(([name, atomic]) => [
+                name,
+                { amountAtomic: atomic.toString(), amountUSDT0: Number(atomic) / 1_000_000 },
+              ])
+            ),
+            freeTools: [
+              "atlas_capabilities",
+              "validate_dataset_source",
+              "estimate_cost",
+              "verify_atlas_report",
+              "get_artifact",
+            ],
+          });
+        }
         const amount = TOOL_PRICES[tool];
         return textResult({
           tool,
@@ -250,9 +293,19 @@ export const handler = createMcpHandler(
       {
         title: "Retrieve an Atlas artifact by content ID",
         description: "Fetch a content-addressed JSON report, chart, query, profile, comparison, or research artifact. Free; an artifact ID is not an access-control token.",
-        inputSchema: { artifactId: artifactIdSchema },
+        inputSchema: { artifactId: artifactIdSchema.optional() },
       },
       async ({ artifactId }) => {
+        if (!artifactId) {
+          return textResult({
+            found: false,
+            usage: "Provide `artifactId` to fetch a stored artifact.",
+            required: {
+              artifactId: "the id returned in a paid result, e.g. artifacts[].id or report.artifactId",
+            },
+            note: "Free. An artifact id is a content address, not an access-control token.",
+          });
+        }
         const artifact = await getArtifact(artifactId);
         return textResult(artifact ? { found: true, ...artifact } : { found: false, artifactId });
       }
